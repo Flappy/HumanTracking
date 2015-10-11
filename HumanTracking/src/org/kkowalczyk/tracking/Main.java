@@ -1,72 +1,49 @@
 package org.kkowalczyk.tracking;
 
 import org.opencv.core.Core;
-import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 
 import javafx.application.Application;
 import javafx.event.EventHandler;
 import javafx.scene.Group;
 import javafx.stage.Stage;
-import javafx.stage.WindowEvent; 
+import javafx.stage.WindowEvent;
 
-public class Main extends Application{
-	public static final int C_WIDTH=640;
-	public static final int C_HEIGHT=480;
-	
-	public static Gui GUI;
-	public static volatile Mat frame;
-	public static volatile Mat prcd_frame;
-	
+public class Main extends Application {
+	volatile Mat preFrame = new Mat();
+	volatile Mat postFrame = new Mat();
 	
 	public static void main(String[] args) {
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-		launch(args);
+		launch();
 	}
 
 	@Override
-	public void start(Stage primaryStage) throws Exception {
-		frame = Mat.zeros(C_HEIGHT, C_WIDTH, CvType.CV_8UC3);
-		prcd_frame = Mat.zeros(C_HEIGHT, C_WIDTH, CvType.CV_8UC3);
+	public void start(Stage stage) throws Exception {
+		stage.setTitle("Human Body Tracking");
+		ThreadManager manager = new ThreadManager();
 		
-		primaryStage.setTitle("Test przechwytywania obrazu i interfejsu");
 		
-        Group root = new Group();
-        GUI = new Gui(root);
-        primaryStage.setScene(GUI);
-        
-        //Uruchamianie w¹tku kamery
-        CameraThread camera = new CameraThread();
-		Thread camera_thread = new Thread(camera);
-		camera_thread.start();
+		Group root = new Group();
+		Gui gui = new Gui(root);
+		stage.setScene(gui);
 		
-		//Uruchamianie w¹tku przetwarzania obrazu
-		ImageProcessingThread im_proc = new ImageProcessingThread();
-		Thread proc_thread = new Thread(im_proc);
-		proc_thread.start();
+		manager.setCameraWorker(new CameraWorker(manager, preFrame));
+		manager.setProcWorker(new ProcWorker(manager, preFrame, postFrame));
+		manager.setGuiPreWorker(new GuiPreWorker(manager,gui, preFrame));
+		manager.setGuiPostWorker(new GuiPostWorker(manager,gui, postFrame));
 		
-        primaryStage.show();
-        
-        primaryStage.setOnCloseRequest(new EventHandler<WindowEvent>() {
+		stage.show();
+		
+		manager.start();
+		
+		stage.setOnCloseRequest(new EventHandler<WindowEvent>() {
         	@Override
             public void handle(WindowEvent we) {
-                System.out.println("Window closed - releasing camera");
-                camera.stop=true;
-                im_proc.stop=true;
+                System.out.println("ZamkniÄ™to okno, wyÅ‚Ä…czanie kamery");
+                manager.stop();
             }
-        });     
+        });
 	}
-	
-	//TODO: przeniesienie konwersji i rysowania na osobny w¹tek+synchronizacja.
-	public static void fromCamera(Mat m){
-		frame=m;
-		GUI.drawPrevFrame();
-	}
-	
-	public static void fromProcess(Mat m){
-		prcd_frame=m;
-		GUI.drawPrcdFrame();
-	}
-	
 
 }
